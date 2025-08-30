@@ -168,7 +168,7 @@
 
             async loadData() {
                 try {
-                    const response = await fetch('./output.json');
+                    const response = await fetch('/output.json');
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
