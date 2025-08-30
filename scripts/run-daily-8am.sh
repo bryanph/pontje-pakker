@@ -35,12 +35,12 @@ run_extraction() {
 
 # Main loop
 while true; do
+    # Run the extraction
+    run_extraction
+
     # Calculate how long to sleep until 8am tomorrow
     sleep_seconds=$(calculate_sleep_seconds)
     
     echo "$(date): Sleeping for $sleep_seconds seconds until 8:00 AM tomorrow"
     sleep "$sleep_seconds"
-    
-    # Run the extraction
-    run_extraction
 done
