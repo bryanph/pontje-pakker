@@ -91,15 +91,11 @@ const stopTimesTomorrow = stopTimesForDay(getTomorrowDate().toISOString());
 const stopTimesTodayAndTomorrow = [...stopTimesToday, ...stopTimesTomorrow];
 
 const output = JSON.stringify(stopTimesTodayAndTomorrow);
-console.log(stopTimesTodayAndTomorrow);
+// console.log(stopTimesTodayAndTomorrow);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const outputFile = path.join(
-  path.resolve(__dirname, ".."),
-  "site/output",
-  "output.json"
-);
+const outputFile = path.join(path.resolve(__dirname, ".."), "site/output.json");
 writeFileSync(outputFile, output, "utf-8");
 
 // const routes: Route[] = db
