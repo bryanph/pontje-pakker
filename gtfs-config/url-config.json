@@ -1,0 +1,9 @@
+{
+    "agencies": [
+        {
+            "agency_key": "gvb",
+            "url": "https://gtfs.ovapi.nl/openov-nl/gtfs-openov-nl.zip"
+        }
+    ],
+    "sqlitePath": "./gtfs.sqlite"
+}
