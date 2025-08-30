@@ -141,10 +141,10 @@
                 this.data = [];
                 // Hard-coded travel times (in minutes)
                 this.travelTimes = {
-                    'Amsterdam, Buiksloterweg': 10,
                     'Amsterdam, Distelweg': 8,
                     'Amsterdam, Pontsteiger': 7,
-                    'Amsterdam, Zamenhofstraat': 5
+                    'Amsterdam, Zamenhofstraat': 5,
+                    'Amsterdam, Buiksloterweg': 9,
                 };
                 this.init();
             }
@@ -236,7 +236,12 @@
                 const stopsGrid = document.createElement('div');
                 stopsGrid.className = 'stops-grid';
 
-                Object.keys(stopsData).forEach(stopName => {
+                // Get stops in the order they appear in this.travelTimes
+                const sortedStopNames = Object.keys(this.travelTimes).filter(stopName => 
+                    stopsData[stopName] && stopsData[stopName].length > 0
+                );
+
+                sortedStopNames.forEach(stopName => {
                     const departures = stopsData[stopName];
                     const travelTime = this.travelTimes[stopName] || 0;
                     
