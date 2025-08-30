@@ -22,7 +22,8 @@ calculate_sleep_seconds() {
 
 # Function to run the data extraction
 run_extraction() {
-    echo "$(date): Starting data extraction..."
+    echo "$(date): Starting import and data extraction..."
+    npx tsx src/import.ts
     npx tsx src/extract-data.ts
     
     if [ $? -eq 0 ]; then

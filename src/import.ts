@@ -4,7 +4,7 @@ import path from "node:path";
 
 const config = JSON.parse(
   await readFile(
-    path.join(import.meta.dirname, "../gtfs-config/local-config.json"),
+    path.join(import.meta.dirname, "../gtfs-config/url-config.json"),
     "utf-8"
   )
 );
