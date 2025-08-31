@@ -1,23 +1,23 @@
 #!/bin/bash
 
 # Pontje Pakker Daily Data Extraction Scheduler
-# Runs the data extraction script daily at 8:00 AM
+# Runs the data extraction script daily at 6:00 AM UTC
 
 echo "🚢 Pontje Pakker Daily Scheduler Started"
 echo "Running from current directory"
 echo "Script: src/extract-data.ts"
-echo "Will run daily at 8:00 AM"
+echo "Will run daily at 6:00 AM UTC"
 echo "Press Ctrl+C to stop"
 echo ""
 
-# Function to calculate seconds until 8am tomorrow
+# Function to calculate seconds until 6am tomorrow
 calculate_sleep_seconds() {
-    # Get tomorrow's date at 8:00 AM
-    tomorrow_8am=$(date -d "tomorrow 08:00" +%s)
+    # Get tomorrow's date at 6:00 AM UTC
+    tomorrow_6am=$(date -u -d "tomorrow 06:00" +%s)
     # Get current time in seconds
-    current_time=$(date +%s)
+    current_time=$(date -u +%s)
     # Calculate difference
-    echo $((tomorrow_8am - current_time))
+    echo $((tomorrow_6am - current_time))
 }
 
 # Function to run the data extraction
@@ -39,9 +39,9 @@ while true; do
     # Run the extraction
     run_extraction
 
-    # Calculate how long to sleep until 8am tomorrow
+    # Calculate how long to sleep until 6am tomorrow
     sleep_seconds=$(calculate_sleep_seconds)
     
-    echo "$(date): Sleeping for $sleep_seconds seconds until 8:00 AM tomorrow"
+    echo "$(date): Sleeping for $sleep_seconds seconds until 6:00 AM UTC tomorrow"
     sleep "$sleep_seconds"
 done
