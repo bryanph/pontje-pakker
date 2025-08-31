@@ -4,6 +4,7 @@ import path from "node:path";
 import { stopTimes } from "gtfs/models";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { exit } from "node:process";
 
 const config = JSON.parse(
   await readFile(
@@ -89,6 +90,11 @@ const stopTimesToday = stopTimesForDay(new Date().toISOString());
 const stopTimesTomorrow = stopTimesForDay(getTomorrowDate().toISOString());
 
 const stopTimesTodayAndTomorrow = [...stopTimesToday, ...stopTimesTomorrow];
+
+if (stopTimesTodayAndTomorrow.length === 0) {
+  console.log("No stop times found for today and tomorrow, exiting early");
+  exit(0);
+}
 
 const output = JSON.stringify(stopTimesTodayAndTomorrow);
 // console.log(stopTimesTodayAndTomorrow);
