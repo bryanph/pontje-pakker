@@ -189,7 +189,8 @@
 
             async loadData() {
                 try {
-                    const response = await fetch('./output.json');
+                    const timestampDay = new Date().toISOString().split('T')[0];
+                    const response = await fetch(`./output.json?t=${timestampDay}`);
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
