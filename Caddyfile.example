@@ -1,0 +1,14 @@
+pontjepakker.example.com {
+	root * {env.FLAMINGOSERVER_ROOT}
+	file_server
+	encode gzip zstd
+
+	# HTML should always be revalidated so users pick up new output.json refs
+	@html path *.html
+	header @html Cache-Control "no-cache"
+
+	# output.json is fetched with a ?ts= cache-buster from index.html,
+	# so it's safe to let it be cached briefly
+	@json path *.json
+	header @json Cache-Control "public, max-age=60"
+}
