@@ -35,7 +35,7 @@ function toInPlaceholders(arr: Array<any>) {
 }
 
 function stopTimesForDay(day: string) {
-  const stopTimes: Route[] = db
+  const stopTimes = db
     .prepare(
       `
 WITH today AS (
@@ -79,7 +79,7 @@ WHERE
 ORDER BY st.departure_time;
 `
     )
-    .all(day, day, ...routeNames, ...stopIds);
+    .all(day, day, ...routeNames, ...stopIds) as Route[];
 
   return stopTimes;
 }

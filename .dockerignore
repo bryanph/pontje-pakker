@@ -1,0 +1,5 @@
+node_modules
+dist
+site/output.json
+gtfs.sqlite
+.git
