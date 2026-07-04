@@ -9,8 +9,8 @@ import { exit } from "node:process";
 const config = JSON.parse(
   await readFile(
     path.join(import.meta.dirname, "../gtfs-config/url-config.json"),
-    "utf-8"
-  )
+    "utf-8",
+  ),
 );
 
 const db = openDb(config);
@@ -24,10 +24,11 @@ const routeNames = [
 
 // only interested in a few stops
 const stopIds = [
-  "3152259", // "Amsterdam, Distelweg"
-  "3152220", // "Amsterdam, IJplein"
-  "3152022", // "Amsterdam, Zamenhofstraat"
-  "3153037", // "Amsterdam, Buiksloterweg"
+  "3980087", // "Amsterdam, Distelweg" (platform 1)
+  "3980922", // "Amsterdam, Distelweg" (platform 2)
+  "3980300", // "Amsterdam, IJplein"
+  "3979837", // "Amsterdam, Zamenhofstraat"
+  "3980896", // "Amsterdam, Buiksloterweg"
 ];
 
 function toInPlaceholders(arr: Array<any>) {
@@ -39,9 +40,10 @@ function stopTimesForDay(day: string) {
     .prepare(
       `
 WITH today AS (
-      SELECT 
+      SELECT
     ? AS service_date,
-    strftime('%w', date(?)) AS weekday
+    strftime('%w', date(?)) AS weekday,
+    strftime('%Y%m%d', date(?)) AS yyyymmdd
 )
 -- SELECT st.departure_time, s.*, st.*, t.*, td.*, c.*, cd.*
 SELECT st.departure_time, s.*, st.*
@@ -52,7 +54,7 @@ JOIN stops s ON st.stop_id = s.stop_id
 JOIN today td
 LEFT JOIN calendar c ON t.service_id = c.service_id
 LEFT JOIN calendar_dates cd ON (
-    t.service_id = cd.service_id AND cd.date = strftime('%Y%m%d','now')
+    t.service_id = cd.service_id AND cd.date = td.yyyymmdd
 )
 WHERE 
     r.route_short_name IN (${toInPlaceholders(routeNames)})
@@ -62,8 +64,8 @@ WHERE
         -- Case 1: calendar_dates overrides calendar
         (cd.exception_type = 1)      -- added today
         OR (cd.exception_type IS NULL -- no exception, use regular calendar
-            AND c.start_date <= strftime('%Y%m%d','now')
-            AND c.end_date >= strftime('%Y%m%d','now')
+            AND c.start_date <= td.yyyymmdd
+            AND c.end_date >= td.yyyymmdd
             AND (
                 (td.weekday = '0' AND c.sunday = 1) OR
                 (td.weekday = '1' AND c.monday = 1) OR
@@ -77,15 +79,14 @@ WHERE
       )
   AND NOT (cd.exception_type = 2)  -- removed today
 ORDER BY st.departure_time;
-`
+`,
     )
-    .all(day, day, ...routeNames, ...stopIds) as Route[];
+    .all(day, day, day, ...routeNames, ...stopIds) as Route[];
 
   return stopTimes;
 }
 
-new Date().toISOString();
-// console.log(stopTimesForDay("20250817"));
+// console.log(stopTimesForDay("2026-07-04"));
 const stopTimesToday = stopTimesForDay(new Date().toISOString());
 const stopTimesTomorrow = stopTimesForDay(getTomorrowDate().toISOString());
 
