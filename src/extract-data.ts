@@ -24,11 +24,16 @@ const routeNames = [
 
 // only interested in a few stops
 const stopIds = [
-  "3980087", // "Amsterdam, Distelweg" (platform 1)
-  "3980922", // "Amsterdam, Distelweg" (platform 2)
-  "3980300", // "Amsterdam, IJplein"
-  "3979837", // "Amsterdam, Zamenhofstraat"
-  "3980896", // "Amsterdam, Buiksloterweg"
+  // city-bound direction
+  "3980087", // F6: Distelweg -> Pontsteiger
+  "3980300", // F2: IJplein -> Centraal Station
+  "3980896", // F3: Buiksloterweg -> Centraal Station
+  "3979837", // F1: Zamenhofstraat -> Azartplein
+  // opposite direction (return)
+  "3980046", // F6: Pontsteiger -> Distelweg
+  "3979906", // F2: Centraal Station -> IJplein
+  "3980940", // F3: Centraal Station -> Buiksloterweg
+  "3981381", // F1: Azartplein -> Zamenhofstraat
 ];
 
 function toInPlaceholders(arr: Array<any>) {
@@ -58,7 +63,7 @@ LEFT JOIN calendar_dates cd ON (
 )
 WHERE 
     r.route_short_name IN (${toInPlaceholders(routeNames)})
-    AND t.direction_id = 0 -- filter by outbound only
+    AND st.stop_sequence = 1 -- departures only (first stop of each trip), both directions
     AND s.stop_id IN (${toInPlaceholders(stopIds)})
   AND (
         -- Case 1: calendar_dates overrides calendar

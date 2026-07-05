@@ -45,6 +45,34 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
+        .direction-toggle {
+            display: flex;
+            gap: 4px;
+            background: white;
+            border-radius: 8px;
+            padding: 4px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .toggle-btn.active {
+            background: #333;
+            color: white;
+        }
+
         .stops-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -151,6 +179,11 @@
 
         <div class="current-time" id="currentTime"></div>
 
+        <div class="direction-toggle" id="directionToggle">
+            <button class="toggle-btn active" data-direction="city">City-bound</button>
+            <button class="toggle-btn" data-direction="noord">Noord-bound</button>
+        </div>
+
         <div id="content">
             <div class="loading">Loading departure times...</div>
         </div>
@@ -160,21 +193,42 @@
         class DepartureBoard {
             constructor() {
                 this.data = [];
-                // Hard-coded travel times (in minutes)
-                this.travelTimes = {
-                    'Amsterdam, Distelweg': 8,
-                    'Amsterdam, IJplein': 5,
-                    'Amsterdam, Zamenhofstraat': 5,
-                    'Amsterdam, Buiksloterweg': 9,
+                this.currentDirection = 'city'; // 'city' or 'noord'
+                // Per-stop config, keyed by GTFS stop_id.
+                // travelTime = minutes needed to reach that dock (adjust to taste).
+                this.stops = {
+                    // City-bound (from Amsterdam-Noord toward the city)
+                    '3980087': { label: 'Distelweg → Pontsteiger', travelTime: 8, direction: 'city', order: 1 },
+                    '3980300': { label: 'IJplein → Centraal Station', travelTime: 5, direction: 'city', order: 2 },
+                    '3980896': { label: 'Buiksloterweg → Centraal Station', travelTime: 9, direction: 'city', order: 3 },
+                    '3979837': { label: 'Zamenhofstraat → Azartplein', travelTime: 5, direction: 'city', order: 4 },
+                    // Noord-bound (from the city toward Amsterdam-Noord)
+                    '3980046': { label: 'Pontsteiger → Distelweg', travelTime: 7, direction: 'noord', order: 1 },
+                    '3979906': { label: 'Centraal Station → IJplein', travelTime: 5, direction: 'noord', order: 2 },
+                    '3980940': { label: 'Centraal Station → Buiksloterweg', travelTime: 9, direction: 'noord', order: 3 },
+                    '3981381': { label: 'Azartplein → Zamenhofstraat', travelTime: 5, direction: 'noord', order: 4 },
                 };
                 this.init();
             }
 
             init() {
+                this.setupToggle();
                 this.updateCurrentTime();
                 this.loadData();
                 setInterval(() => this.updateCurrentTime(), 1000);
                 setInterval(() => this.updateDisplay(), 30000); // Update every 30 seconds
+            }
+
+            setupToggle() {
+                const toggle = document.getElementById('directionToggle');
+                toggle.querySelectorAll('.toggle-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.currentDirection = btn.dataset.direction;
+                        toggle.querySelectorAll('.toggle-btn').forEach(b =>
+                            b.classList.toggle('active', b === btn));
+                        this.updateDisplay();
+                    });
+                });
             }
 
             updateCurrentTime() {
@@ -211,19 +265,19 @@
                 const now = new Date();
                 const currentTime = now.getHours() * 60 + now.getMinutes();
 
-                // Group departures by stop
+                // Group departures by stop_id
                 const stopsData = {};
                 this.data.forEach(departure => {
-                    if (!stopsData[departure.stop_name]) {
-                        stopsData[departure.stop_name] = [];
+                    if (!stopsData[departure.stop_id]) {
+                        stopsData[departure.stop_id] = [];
                     }
-                    stopsData[departure.stop_name].push(departure);
+                    stopsData[departure.stop_id].push(departure);
                 });
 
                 // Sort departures by time and filter future departures
-                Object.keys(stopsData).forEach(stopName => {
+                Object.keys(stopsData).forEach(stopId => {
                     // Filter future departures and sort by time
-                    const futureDepartures = stopsData[stopName]
+                    const futureDepartures = stopsData[stopId]
                         .filter(departure => {
                             const [hours, minutes] = departure.departure_time.split(':').map(Number);
                             const departureTime = hours * 60 + minutes;
@@ -247,7 +301,7 @@
                         }
                     }
                     
-                    stopsData[stopName] = uniqueDepartures;
+                    stopsData[stopId] = uniqueDepartures;
                 });
 
                 this.renderStops(stopsData, currentTime);
@@ -255,18 +309,29 @@
 
             renderStops(stopsData, currentTime) {
                 const content = document.getElementById('content');
+                content.innerHTML = '';
+
+                // Only show stops for the currently selected direction, sorted by their order field
+                const stopIds = Object.keys(this.stops)
+                    .filter(stopId =>
+                        this.stops[stopId].direction === this.currentDirection &&
+                        stopsData[stopId] && stopsData[stopId].length > 0
+                    )
+                    .sort((a, b) => this.stops[a].order - this.stops[b].order);
+
+                if (stopIds.length === 0) {
+                    content.innerHTML = '<div class="loading">No upcoming departures.</div>';
+                    return;
+                }
+
                 const stopsGrid = document.createElement('div');
                 stopsGrid.className = 'stops-grid';
 
-                // Get stops in the order they appear in this.travelTimes
-                const sortedStopNames = Object.keys(this.travelTimes).filter(stopName => 
-                    stopsData[stopName] && stopsData[stopName].length > 0
-                );
+                stopIds.forEach(stopId => {
+                    const config = this.stops[stopId];
+                    const departures = stopsData[stopId];
+                    const travelTime = config.travelTime || 0;
 
-                sortedStopNames.forEach(stopName => {
-                    const departures = stopsData[stopName];
-                    const travelTime = this.travelTimes[stopName] || 0;
-                    
                     // Check if any departure is reachable
                     const hasReachableDeparture = departures.some(departure => {
                         const [hours, minutes] = departure.departure_time.split(':').map(Number);
@@ -279,37 +344,28 @@
 
                     const stopNameDiv = document.createElement('div');
                     stopNameDiv.className = 'stop-name';
-                    stopNameDiv.textContent = stopName;
+                    stopNameDiv.textContent = config.label;
                     stopCard.appendChild(stopNameDiv);
 
                     const departuresDiv = document.createElement('div');
                     departuresDiv.className = 'departure-times';
 
-                    if (departures.length === 0) {
-                        const noDepartures = document.createElement('div');
-                        noDepartures.textContent = 'No more departures today';
-                        noDepartures.style.color = '#6b7280';
-                        noDepartures.style.fontStyle = 'italic';
-                        departuresDiv.appendChild(noDepartures);
-                    } else {
-                        departures.forEach(departure => {
-                            const [hours, minutes] = departure.departure_time.split(':').map(Number);
-                            const departureTime = hours * 60 + minutes;
-                            const timeUntilDeparture = departureTime - currentTime;
-                            const isReachable = timeUntilDeparture >= travelTime;
+                    departures.forEach(departure => {
+                        const [hours, minutes] = departure.departure_time.split(':').map(Number);
+                        const departureTime = hours * 60 + minutes;
+                        const timeUntilDeparture = departureTime - currentTime;
+                        const isReachable = timeUntilDeparture >= travelTime;
 
-                            const departureDiv = document.createElement('div');
-                            departureDiv.className = `departure-time ${isReachable ? 'reachable' : 'unreachable'}`;
-                            departureDiv.textContent = departure.departure_time;
-                            departuresDiv.appendChild(departureDiv);
-                        });
-                    }
+                        const departureDiv = document.createElement('div');
+                        departureDiv.className = `departure-time ${isReachable ? 'reachable' : 'unreachable'}`;
+                        departureDiv.textContent = departure.departure_time;
+                        departuresDiv.appendChild(departureDiv);
+                    });
 
                     stopCard.appendChild(departuresDiv);
                     stopsGrid.appendChild(stopCard);
                 });
 
-                content.innerHTML = '';
                 content.appendChild(stopsGrid);
             }
         }
