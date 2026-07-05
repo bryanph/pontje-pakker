@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pontje Pakker - Departure Times</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
             margin: 0;
@@ -18,7 +20,7 @@
         }
 
         .container {
-            max-width: 500px;
+            max-width: 900px;
             margin: 0 auto;
             width: 100%;
         }
@@ -45,76 +47,58 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
-        .direction-toggle {
-            display: flex;
-            gap: 4px;
-            background: white;
+        #map {
+            width: 100%;
+            height: 70vh;
+            min-height: 400px;
             border-radius: 8px;
-            padding: 4px;
-            margin-bottom: 30px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: #dfe6e9;
         }
 
-        .toggle-btn {
-            flex: 1;
-            padding: 12px;
+        /* Always-visible dock label (Leaflet permanent tooltip). */
+        .leaflet-tooltip.stop-tip {
+            background: white;
             border: none;
-            background: transparent;
+            border-left: 4px solid #999;
             border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #666;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+            padding: 6px 8px;
+            font-size: 0.72rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            color: #333;
         }
 
-        .toggle-btn.active {
-            background: #333;
-            color: white;
-        }
+        /* Hide the tooltip's little pointer triangle. */
+        .leaflet-tooltip.stop-tip::before { display: none; }
 
-        .stops-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
+        /* Direction accent colors */
+        .leaflet-tooltip.stop-tip.dir-city { border-left-color: #2563eb; }
+        .leaflet-tooltip.stop-tip.dir-noord { border-left-color: #d97706; }
 
-        .stop-card {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .stop-card.reachable {
-            border-left: 4px solid #28a745;
-        }
-
-        .stop-card.unreachable {
-            border-left: 4px solid #dc3545;
-        }
-
-        .stop-name {
-            font-size: 1.2rem;
+        .stop-label-name {
             font-weight: 700;
             color: #333;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #f3f4f6;
+            margin-bottom: 4px;
         }
 
-        .departure-times {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-            gap: 8px;
+        .stop-label-times {
+            display: flex;
+            gap: 4px;
+        }
+
+        .stop-label-none {
+            color: #999;
+            font-weight: 600;
         }
 
         .departure-time {
-            padding: 8px;
+            padding: 3px 6px;
             border-radius: 4px;
             text-align: center;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.72rem;
         }
 
         .departure-time.reachable {
@@ -153,18 +137,10 @@
                 max-width: 100%;
             }
             
-            .stops-grid {
-                grid-template-columns: 1fr;
+            #map {
+                height: 75vh;
             }
-            
-            .departure-times {
-                grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-            }
-            
-            .stop-card {
-                padding: 15px;
-            }
-            
+
             .header h1 {
                 font-size: 1.5rem;
             }
@@ -179,56 +155,42 @@
 
         <div class="current-time" id="currentTime"></div>
 
-        <div class="direction-toggle" id="directionToggle">
-            <button class="toggle-btn active" data-direction="city">City-bound</button>
-            <button class="toggle-btn" data-direction="noord">Noord-bound</button>
-        </div>
-
-        <div id="content">
-            <div class="loading">Loading departure times...</div>
-        </div>
+        <div id="map"></div>
+        <div id="status"></div>
     </div>
 
     <script>
         class DepartureBoard {
             constructor() {
                 this.data = [];
-                this.currentDirection = 'city'; // 'city' or 'noord'
+                this.map = null;
+                this.markerLayer = null;
+                this.fittedOnce = false;
                 // Per-stop config, keyed by GTFS stop_id.
                 // travelTime = minutes needed to reach that dock (adjust to taste).
+                // Optional per-stop `labelDir` controls where the label sits relative to its
+                // dot: 'top' (default), 'bottom', 'left' or 'right'. It stays glued to the dot
+                // at every zoom level.
                 this.stops = {
                     // City-bound (from Amsterdam-Noord toward the city)
                     '3980087': { label: 'Distelweg → Pontsteiger', travelTime: 8, direction: 'city', order: 1 },
-                    '3980300': { label: 'IJplein → Centraal Station', travelTime: 5, direction: 'city', order: 2 },
+                    '3980300': { label: 'IJplein → Centraal Station', travelTime: 5, direction: 'city', order: 2, labelDir: 'right' },
                     '3980896': { label: 'Buiksloterweg → Centraal Station', travelTime: 9, direction: 'city', order: 3 },
                     '3979837': { label: 'Zamenhofstraat → Azartplein', travelTime: 5, direction: 'city', order: 4 },
                     // Noord-bound (from the city toward Amsterdam-Noord)
-                    '3980046': { label: 'Pontsteiger → Distelweg', travelTime: 7, direction: 'noord', order: 1 },
-                    '3979906': { label: 'Centraal Station → IJplein', travelTime: 5, direction: 'noord', order: 2 },
-                    '3980940': { label: 'Centraal Station → Buiksloterweg', travelTime: 9, direction: 'noord', order: 3 },
-                    '3981381': { label: 'Azartplein → Zamenhofstraat', travelTime: 5, direction: 'noord', order: 4 },
+                    '3980046': { label: 'Pontsteiger → Distelweg', travelTime: 7, direction: 'noord', order: 1, labelDir: 'bottom' },
+                    '3979906': { label: 'Centraal Station → IJplein', travelTime: 5, direction: 'noord', order: 2, labelDir: 'right' },
+                    '3980940': { label: 'Centraal Station → Buiksloterweg', travelTime: 9, direction: 'noord', order: 3, labelDir: 'left' },
+                    '3981381': { label: 'Azartplein → Zamenhofstraat', travelTime: 5, direction: 'noord', order: 4, labelDir: 'bottom' },
                 };
                 this.init();
             }
 
             init() {
-                this.setupToggle();
                 this.updateCurrentTime();
                 this.loadData();
                 setInterval(() => this.updateCurrentTime(), 1000);
                 setInterval(() => this.updateDisplay(), 30000); // Update every 30 seconds
-            }
-
-            setupToggle() {
-                const toggle = document.getElementById('directionToggle');
-                toggle.querySelectorAll('.toggle-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        this.currentDirection = btn.dataset.direction;
-                        toggle.querySelectorAll('.toggle-btn').forEach(b =>
-                            b.classList.toggle('active', b === btn));
-                        this.updateDisplay();
-                    });
-                });
             }
 
             updateCurrentTime() {
@@ -257,8 +219,23 @@
             }
 
             showError(message) {
-                const content = document.getElementById('content');
-                content.innerHTML = `<div class="error">${message}</div>`;
+                const status = document.getElementById('status');
+                status.innerHTML = `<div class="error">${message}</div>`;
+            }
+
+            // Build stop_id -> {lat, lon} from any record for that stop,
+            // so a dock still has a location even with no upcoming departures.
+            buildCoordLookup() {
+                const coords = {};
+                this.data.forEach(d => {
+                    if (!coords[d.stop_id] && d.stop_lat != null && d.stop_lon != null) {
+                        coords[d.stop_id] = {
+                            lat: Number(d.stop_lat),
+                            lon: Number(d.stop_lon)
+                        };
+                    }
+                });
+                return coords;
             }
 
             updateDisplay() {
@@ -304,69 +281,92 @@
                     stopsData[stopId] = uniqueDepartures;
                 });
 
-                this.renderStops(stopsData, currentTime);
+                this.renderMap(stopsData, currentTime);
             }
 
-            renderStops(stopsData, currentTime) {
-                const content = document.getElementById('content');
-                content.innerHTML = '';
+            // HH:MM:SS -> minutes since midnight (using hours+minutes, matching prior behavior)
+            departureMinutes(departure) {
+                const [hours, minutes] = departure.departure_time.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
 
-                // Only show stops for the currently selected direction, sorted by their order field
-                const stopIds = Object.keys(this.stops)
-                    .filter(stopId =>
-                        this.stops[stopId].direction === this.currentDirection &&
-                        stopsData[stopId] && stopsData[stopId].length > 0
-                    )
-                    .sort((a, b) => this.stops[a].order - this.stops[b].order);
+            // Build the always-visible label HTML for one dock.
+            buildLabelHtml(config, departures, currentTime) {
+                const travelTime = config.travelTime || 0;
+                let timesHtml;
+                if (!departures || departures.length === 0) {
+                    timesHtml = '<div class="stop-label-none">No departures</div>';
+                } else {
+                    const chips = departures.map(departure => {
+                        const isReachable = (this.departureMinutes(departure) - currentTime) >= travelTime;
+                        const time = departure.departure_time.slice(0, 5); // HH:MM
+                        return `<span class="departure-time ${isReachable ? 'reachable' : 'unreachable'}">${time}</span>`;
+                    }).join('');
+                    timesHtml = `<div class="stop-label-times">${chips}</div>`;
+                }
+                return `<div class="stop-label-name">${config.label}</div>` + timesHtml;
+            }
 
-                if (stopIds.length === 0) {
-                    content.innerHTML = '<div class="loading">No upcoming departures.</div>';
-                    return;
+            renderMap(stopsData, currentTime) {
+                const coords = this.buildCoordLookup();
+
+                // Create the map once; reuse it on periodic refreshes.
+                if (!this.map) {
+                    this.map = L.map('map', { scrollWheelZoom: true });
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(this.map);
+                    this.markerLayer = L.layerGroup().addTo(this.map);
                 }
 
-                const stopsGrid = document.createElement('div');
-                stopsGrid.className = 'stops-grid';
+                // Redraw markers each refresh.
+                this.markerLayer.clearLayers();
+                const bounds = [];
 
-                stopIds.forEach(stopId => {
+                Object.keys(this.stops).forEach(stopId => {
+                    const c = coords[stopId];
+                    if (!c) return; // no coordinate for this dock in the data
                     const config = this.stops[stopId];
-                    const departures = stopsData[stopId];
-                    const travelTime = config.travelTime || 0;
+                    const departures = stopsData[stopId] || [];
+                    const dirColor = config.direction === 'city' ? '#2563eb' : '#d97706';
 
-                    // Check if any departure is reachable
-                    const hasReachableDeparture = departures.some(departure => {
-                        const [hours, minutes] = departure.departure_time.split(':').map(Number);
-                        const departureTime = hours * 60 + minutes;
-                        return (departureTime - currentTime) >= travelTime;
+                    // A small dot marks the exact dock location.
+                    const dot = L.circleMarker([c.lat, c.lon], {
+                        radius: 5,
+                        color: '#fff',
+                        weight: 2,
+                        fillColor: dirColor,
+                        fillOpacity: 1
+                    }).addTo(this.markerLayer);
+
+                    // Place the label on the configured side of its dot (default: top), with a
+                    // small gap offset so it stays glued to the dot at every zoom level.
+                    const labelDir = config.labelDir || 'top';
+                    const gap = 8;
+                    const offsets = {
+                        top: [0, -gap],
+                        bottom: [0, gap],
+                        left: [-gap, 0],
+                        right: [gap, 0]
+                    };
+                    dot.bindTooltip(this.buildLabelHtml(config, departures, currentTime), {
+                        permanent: true,
+                        direction: labelDir,
+                        offset: offsets[labelDir] || offsets.top,
+                        className: `stop-tip dir-${config.direction}`,
+                        opacity: 1
                     });
 
-                    const stopCard = document.createElement('div');
-                    stopCard.className = `stop-card ${hasReachableDeparture ? 'reachable' : 'unreachable'}`;
-
-                    const stopNameDiv = document.createElement('div');
-                    stopNameDiv.className = 'stop-name';
-                    stopNameDiv.textContent = config.label;
-                    stopCard.appendChild(stopNameDiv);
-
-                    const departuresDiv = document.createElement('div');
-                    departuresDiv.className = 'departure-times';
-
-                    departures.forEach(departure => {
-                        const [hours, minutes] = departure.departure_time.split(':').map(Number);
-                        const departureTime = hours * 60 + minutes;
-                        const timeUntilDeparture = departureTime - currentTime;
-                        const isReachable = timeUntilDeparture >= travelTime;
-
-                        const departureDiv = document.createElement('div');
-                        departureDiv.className = `departure-time ${isReachable ? 'reachable' : 'unreachable'}`;
-                        departureDiv.textContent = departure.departure_time;
-                        departuresDiv.appendChild(departureDiv);
-                    });
-
-                    stopCard.appendChild(departuresDiv);
-                    stopsGrid.appendChild(stopCard);
+                    bounds.push([c.lat, c.lon]);
                 });
 
-                content.appendChild(stopsGrid);
+                // Zoom to contain all docks, but only on first render so periodic
+                // refreshes don't yank the user's pan/zoom.
+                if (!this.fittedOnce && bounds.length > 0) {
+                    this.map.fitBounds(L.latLngBounds(bounds).pad(0.15));
+                    this.fittedOnce = true;
+                }
             }
         }
 
