@@ -2,7 +2,10 @@
     "agencies": [
         {
             "agency_key": "gvb",
-            "url": "https://gtfs.ovapi.nl/openov-nl/gtfs-openov-nl.zip"
+            "url": "https://gtfs.ovapi.nl/openov-nl/gtfs-openov-nl.zip",
+            "headers": {
+                "User-Agent": "pontje-pakker/1.0 (+https://pontje.bryanhaakman.com; bryanhaakman@gmail.com)"
+            }
         }
     ],
     "sqlitePath": "./gtfs.sqlite"
